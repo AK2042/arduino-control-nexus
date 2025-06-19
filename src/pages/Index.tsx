@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+
+import React, { useState } from 'react';
 import { Power, PowerOff, Waves, Eye, Ruler, Database } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -15,80 +16,13 @@ const Index = () => {
   });
   const [loading, setLoading] = useState({
     leds: {},
-    buzzer: false
+    buzzer: false,
+    ldr: false,
+    distance: false,
+    allSensors: false
   });
 
   const BASE_URL = "http://127.0.0.1:8000";
-
-  // Helper function to safely parse potentially stringified JSON
-  const safeParseValue = (value: any) => {
-    if (typeof value === 'string') {
-      try {
-        const parsed = JSON.parse(value);
-        return parsed;
-      } catch {
-        // If it's not JSON, return the string as is
-        return value;
-      }
-    }
-    return value;
-  };
-
-  // Auto-refresh sensor data every second
-  useEffect(() => {
-    const fetchSensorData = async () => {
-      try {
-        // Fetch individual LDR data
-        const ldrResponse = await fetch(`${BASE_URL}/ldr`);
-        const ldrData = await ldrResponse.json();
-        let ldrValue = safeParseValue(ldrData.ldr_value);
-        if (typeof ldrValue === 'object' && ldrValue.ldr !== undefined) {
-          ldrValue = ldrValue.ldr;
-        }
-        
-        // Fetch individual distance data
-        const distanceResponse = await fetch(`${BASE_URL}/ultrasonic`);
-        const distanceData = await distanceResponse.json();
-        let distanceValue = safeParseValue(distanceData.distance_cm);
-        if (typeof distanceValue === 'object' && distanceValue.distance !== undefined) {
-          distanceValue = distanceValue.distance;
-        }
-        
-        // Fetch combined sensor data
-        const allSensorsResponse = await fetch(`${BASE_URL}/sensors`);
-        const allSensorsData = await allSensorsResponse.json();
-        
-        let allSensorsResult = { distance: 'Error', ldr: 'Error' };
-        
-        // Handle different response formats for combined sensors
-        if (typeof allSensorsData === 'object' && allSensorsData !== null && allSensorsData.distance !== undefined && allSensorsData.ldr !== undefined) {
-          allSensorsResult = { 
-            distance: allSensorsData.distance, 
-            ldr: allSensorsData.ldr 
-          };
-        } else if (allSensorsData.error) {
-          allSensorsResult = { distance: 'Error', ldr: 'Error' };
-        }
-        
-        setSensorData({
-          ldr: ldrValue,
-          distance: distanceValue,
-          allSensors: allSensorsResult
-        });
-      } catch (error) {
-        console.log('Auto-refresh failed, sensor might be disconnected');
-      }
-    };
-
-    // Initial fetch
-    fetchSensorData();
-    
-    // Set up interval for auto-refresh
-    const interval = setInterval(fetchSensorData, 1000);
-    
-    // Cleanup interval on component unmount
-    return () => clearInterval(interval);
-  }, [BASE_URL]);
 
   const controlLED = async (led: number, state: 'on' | 'off') => {
     setLoading(prev => ({ ...prev, leds: { ...prev.leds, [led]: true } }));
@@ -133,6 +67,72 @@ const Index = () => {
       });
     } finally {
       setLoading(prev => ({ ...prev, buzzer: false }));
+    }
+  };
+
+  const getLDR = async () => {
+    setLoading(prev => ({ ...prev, ldr: true }));
+    try {
+      const response = await fetch(`${BASE_URL}/ldr`);
+      const data = await response.json();
+      setSensorData(prev => ({ ...prev, ldr: data.ldr_value }));
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to get LDR value",
+        variant: "destructive",
+        duration: 3000,
+      });
+    } finally {
+      setLoading(prev => ({ ...prev, ldr: false }));
+    }
+  };
+
+  const getDistance = async () => {
+    setLoading(prev => ({ ...prev, distance: true }));
+    try {
+      const response = await fetch(`${BASE_URL}/ultrasonic`);
+      const data = await response.json();
+      setSensorData(prev => ({ ...prev, distance: data.distance_cm }));
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to get distance",
+        variant: "destructive",
+        duration: 3000,
+      });
+    } finally {
+      setLoading(prev => ({ ...prev, distance: false }));
+    }
+  };
+
+  const getAllSensorData = async () => {
+    setLoading(prev => ({ ...prev, allSensors: true }));
+    try {
+      const response = await fetch(`${BASE_URL}/sensors`);
+      const data = await response.json();
+      if (data.error) {
+        toast({
+          title: "Sensor Error",
+          description: data.raw,
+          variant: "destructive",
+          duration: 3000,
+        });
+      } else {
+        setSensorData(prev => ({
+          ...prev,
+          allSensors: { distance: data.distance, ldr: data.ldr }
+        }));
+      }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to get sensor data",
+        variant: "destructive",
+        duration: 3000,
+      });
+    } finally {
+      setLoading(prev => ({ ...prev, allSensors: false }));
     }
   };
 
@@ -230,23 +230,42 @@ const Index = () => {
               <CardTitle className="text-2xl text-white flex items-center gap-3">
                 <Eye className="h-7 w-7 text-purple-400" />
                 Individual Sensors
-                <div className="ml-auto w-3 h-3 bg-green-400 rounded-full animate-pulse" title="Auto-updating every second" />
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="p-4 rounded-xl bg-white/5 border border-white/10">
-                <span className="text-white font-medium">Light Sensor (LDR)</span>
-                <div className="p-3 bg-white/10 rounded-lg mt-3">
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-white font-medium">Light Sensor (LDR)</span>
+                  <Button
+                    onClick={getLDR}
+                    disabled={loading.ldr}
+                    className="bg-purple-500 hover:bg-purple-600 text-white transition-all duration-200 hover:scale-105"
+                    size="sm"
+                  >
+                    {loading.ldr ? 'Reading...' : 'Get Value'}
+                  </Button>
+                </div>
+                <div className="p-3 bg-white/10 rounded-lg">
                   <span className="text-2xl font-bold text-purple-300">LDR: {sensorData.ldr}</span>
                 </div>
               </div>
 
               <div className="p-4 rounded-xl bg-white/5 border border-white/10">
-                <span className="text-white font-medium flex items-center gap-2">
-                  <Ruler className="h-4 w-4" />
-                  Ultrasonic Distance
-                </span>
-                <div className="p-3 bg-white/10 rounded-lg mt-3">
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-white font-medium flex items-center gap-2">
+                    <Ruler className="h-4 w-4" />
+                    Ultrasonic Distance
+                  </span>
+                  <Button
+                    onClick={getDistance}
+                    disabled={loading.distance}
+                    className="bg-blue-500 hover:bg-blue-600 text-white transition-all duration-200 hover:scale-105"
+                    size="sm"
+                  >
+                    {loading.distance ? 'Reading...' : 'Get Distance'}
+                  </Button>
+                </div>
+                <div className="p-3 bg-white/10 rounded-lg">
                   <span className="text-2xl font-bold text-blue-300">Distance: {sensorData.distance} cm</span>
                 </div>
               </div>
@@ -259,12 +278,20 @@ const Index = () => {
               <CardTitle className="text-2xl text-white flex items-center gap-3">
                 <Database className="h-7 w-7 text-emerald-400" />
                 Combined Sensor Data
-                <div className="ml-auto w-3 h-3 bg-green-400 rounded-full animate-pulse" title="Auto-updating every second" />
               </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="p-6 rounded-xl bg-white/5 border border-white/10">
-                <span className="text-white font-medium text-lg mb-4 block">All Sensors (JSON)</span>
+                <div className="flex items-center justify-between mb-4">
+                  <span className="text-white font-medium text-lg">All Sensors (JSON)</span>
+                  <Button
+                    onClick={getAllSensorData}
+                    disabled={loading.allSensors}
+                    className="bg-emerald-500 hover:bg-emerald-600 text-white transition-all duration-200 hover:scale-105"
+                  >
+                    {loading.allSensors ? 'Loading...' : 'Get All Data'}
+                  </Button>
+                </div>
                 <div className="p-4 bg-white/10 rounded-lg space-y-2">
                   <div className="text-emerald-300 font-bold">
                     Distance: {sensorData.allSensors.distance} cm
