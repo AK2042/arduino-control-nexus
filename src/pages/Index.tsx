@@ -15,10 +15,7 @@ const Index = () => {
   });
   const [loading, setLoading] = useState({
     leds: {},
-    buzzer: false,
-    ldr: false,
-    distance: false,
-    allSensors: false
+    buzzer: false
   });
 
   const BASE_URL = "http://127.0.0.1:8000";
@@ -139,88 +136,6 @@ const Index = () => {
     }
   };
 
-  const getLDR = async () => {
-    setLoading(prev => ({ ...prev, ldr: true }));
-    try {
-      const response = await fetch(`${BASE_URL}/ldr`);
-      const data = await response.json();
-      let ldrValue = safeParseValue(data.ldr_value);
-      if (typeof ldrValue === 'object' && ldrValue.ldr !== undefined) {
-        ldrValue = ldrValue.ldr;
-      }
-      setSensorData(prev => ({ ...prev, ldr: ldrValue }));
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to get LDR value",
-        variant: "destructive",
-        duration: 3000,
-      });
-    } finally {
-      setLoading(prev => ({ ...prev, ldr: false }));
-    }
-  };
-
-  const getDistance = async () => {
-    setLoading(prev => ({ ...prev, distance: true }));
-    try {
-      const response = await fetch(`${BASE_URL}/ultrasonic`);
-      const data = await response.json();
-      let distanceValue = safeParseValue(data.distance_cm);
-      if (typeof distanceValue === 'object' && distanceValue.distance !== undefined) {
-        distanceValue = distanceValue.distance;
-      }
-      setSensorData(prev => ({ ...prev, distance: distanceValue }));
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to get distance",
-        variant: "destructive",
-        duration: 3000,
-      });
-    } finally {
-      setLoading(prev => ({ ...prev, distance: false }));
-    }
-  };
-
-  const getAllSensorData = async () => {
-    setLoading(prev => ({ ...prev, allSensors: true }));
-    try {
-      const response = await fetch(`${BASE_URL}/sensors`);
-      const data = await response.json();
-      
-      if (typeof data === 'object' && data !== null && data.distance !== undefined && data.ldr !== undefined) {
-        setSensorData(prev => ({
-          ...prev,
-          allSensors: { distance: data.distance, ldr: data.ldr }
-        }));
-      } else if (data.error) {
-        toast({
-          title: "Sensor Error",
-          description: data.raw,
-          variant: "destructive",
-          duration: 3000,
-        });
-      } else {
-        toast({
-          title: "Invalid Response",
-          description: "Received unexpected data format from sensors",
-          variant: "destructive",
-          duration: 3000,
-        });
-      }
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to get sensor data",
-        variant: "destructive",
-        duration: 3000,
-      });
-    } finally {
-      setLoading(prev => ({ ...prev, allSensors: false }));
-    }
-  };
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 p-4">
       <div className="max-w-7xl mx-auto">
@@ -320,38 +235,18 @@ const Index = () => {
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="p-4 rounded-xl bg-white/5 border border-white/10">
-                <div className="flex items-center justify-between mb-3">
-                  <span className="text-white font-medium">Light Sensor (LDR)</span>
-                  <Button
-                    onClick={getLDR}
-                    disabled={loading.ldr}
-                    className="bg-purple-500 hover:bg-purple-600 text-white transition-all duration-200 hover:scale-105"
-                    size="sm"
-                  >
-                    {loading.ldr ? 'Reading...' : 'Get Value'}
-                  </Button>
-                </div>
-                <div className="p-3 bg-white/10 rounded-lg">
+                <span className="text-white font-medium">Light Sensor (LDR)</span>
+                <div className="p-3 bg-white/10 rounded-lg mt-3">
                   <span className="text-2xl font-bold text-purple-300">LDR: {sensorData.ldr}</span>
                 </div>
               </div>
 
               <div className="p-4 rounded-xl bg-white/5 border border-white/10">
-                <div className="flex items-center justify-between mb-3">
-                  <span className="text-white font-medium flex items-center gap-2">
-                    <Ruler className="h-4 w-4" />
-                    Ultrasonic Distance
-                  </span>
-                  <Button
-                    onClick={getDistance}
-                    disabled={loading.distance}
-                    className="bg-blue-500 hover:bg-blue-600 text-white transition-all duration-200 hover:scale-105"
-                    size="sm"
-                  >
-                    {loading.distance ? 'Reading...' : 'Get Distance'}
-                  </Button>
-                </div>
-                <div className="p-3 bg-white/10 rounded-lg">
+                <span className="text-white font-medium flex items-center gap-2">
+                  <Ruler className="h-4 w-4" />
+                  Ultrasonic Distance
+                </span>
+                <div className="p-3 bg-white/10 rounded-lg mt-3">
                   <span className="text-2xl font-bold text-blue-300">Distance: {sensorData.distance} cm</span>
                 </div>
               </div>
@@ -369,16 +264,7 @@ const Index = () => {
             </CardHeader>
             <CardContent>
               <div className="p-6 rounded-xl bg-white/5 border border-white/10">
-                <div className="flex items-center justify-between mb-4">
-                  <span className="text-white font-medium text-lg">All Sensors (JSON)</span>
-                  <Button
-                    onClick={getAllSensorData}
-                    disabled={loading.allSensors}
-                    className="bg-emerald-500 hover:bg-emerald-600 text-white transition-all duration-200 hover:scale-105"
-                  >
-                    {loading.allSensors ? 'Loading...' : 'Get All Data'}
-                  </Button>
-                </div>
+                <span className="text-white font-medium text-lg mb-4 block">All Sensors (JSON)</span>
                 <div className="p-4 bg-white/10 rounded-lg space-y-2">
                   <div className="text-emerald-300 font-bold">
                     Distance: {sensorData.allSensors.distance} cm
