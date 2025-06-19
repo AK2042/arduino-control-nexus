@@ -23,6 +23,20 @@ const Index = () => {
 
   const BASE_URL = "http://127.0.0.1:8000";
 
+  // Helper function to safely parse potentially stringified JSON
+  const safeParseValue = (value: any) => {
+    if (typeof value === 'string') {
+      try {
+        const parsed = JSON.parse(value);
+        return parsed;
+      } catch {
+        // If it's not JSON, return the string as is
+        return value;
+      }
+    }
+    return value;
+  };
+
   // Auto-refresh sensor data every second
   useEffect(() => {
     const fetchSensorData = async () => {
@@ -30,21 +44,39 @@ const Index = () => {
         // Fetch individual LDR data
         const ldrResponse = await fetch(`${BASE_URL}/ldr`);
         const ldrData = await ldrResponse.json();
+        let ldrValue = safeParseValue(ldrData.ldr_value);
+        if (typeof ldrValue === 'object' && ldrValue.ldr !== undefined) {
+          ldrValue = ldrValue.ldr;
+        }
         
         // Fetch individual distance data
         const distanceResponse = await fetch(`${BASE_URL}/ultrasonic`);
         const distanceData = await distanceResponse.json();
+        let distanceValue = safeParseValue(distanceData.distance_cm);
+        if (typeof distanceValue === 'object' && distanceValue.distance !== undefined) {
+          distanceValue = distanceValue.distance;
+        }
         
         // Fetch combined sensor data
         const allSensorsResponse = await fetch(`${BASE_URL}/sensors`);
         const allSensorsData = await allSensorsResponse.json();
         
+        let allSensorsResult = { distance: 'Error', ldr: 'Error' };
+        
+        // Handle different response formats for combined sensors
+        if (typeof allSensorsData === 'object' && allSensorsData !== null && allSensorsData.distance !== undefined && allSensorsData.ldr !== undefined) {
+          allSensorsResult = { 
+            distance: allSensorsData.distance, 
+            ldr: allSensorsData.ldr 
+          };
+        } else if (allSensorsData.error) {
+          allSensorsResult = { distance: 'Error', ldr: 'Error' };
+        }
+        
         setSensorData({
-          ldr: ldrData.ldr_value,
-          distance: distanceData.distance_cm,
-          allSensors: allSensorsData.error 
-            ? { distance: 'Error', ldr: 'Error' }
-            : { distance: allSensorsData.distance, ldr: allSensorsData.ldr }
+          ldr: ldrValue,
+          distance: distanceValue,
+          allSensors: allSensorsResult
         });
       } catch (error) {
         console.log('Auto-refresh failed, sensor might be disconnected');
@@ -112,7 +144,11 @@ const Index = () => {
     try {
       const response = await fetch(`${BASE_URL}/ldr`);
       const data = await response.json();
-      setSensorData(prev => ({ ...prev, ldr: data.ldr_value }));
+      let ldrValue = safeParseValue(data.ldr_value);
+      if (typeof ldrValue === 'object' && ldrValue.ldr !== undefined) {
+        ldrValue = ldrValue.ldr;
+      }
+      setSensorData(prev => ({ ...prev, ldr: ldrValue }));
     } catch (error) {
       toast({
         title: "Error",
@@ -130,7 +166,11 @@ const Index = () => {
     try {
       const response = await fetch(`${BASE_URL}/ultrasonic`);
       const data = await response.json();
-      setSensorData(prev => ({ ...prev, distance: data.distance_cm }));
+      let distanceValue = safeParseValue(data.distance_cm);
+      if (typeof distanceValue === 'object' && distanceValue.distance !== undefined) {
+        distanceValue = distanceValue.distance;
+      }
+      setSensorData(prev => ({ ...prev, distance: distanceValue }));
     } catch (error) {
       toast({
         title: "Error",
@@ -148,7 +188,13 @@ const Index = () => {
     try {
       const response = await fetch(`${BASE_URL}/sensors`);
       const data = await response.json();
-      if (data.error) {
+      
+      if (typeof data === 'object' && data !== null && data.distance !== undefined && data.ldr !== undefined) {
+        setSensorData(prev => ({
+          ...prev,
+          allSensors: { distance: data.distance, ldr: data.ldr }
+        }));
+      } else if (data.error) {
         toast({
           title: "Sensor Error",
           description: data.raw,
@@ -156,10 +202,12 @@ const Index = () => {
           duration: 3000,
         });
       } else {
-        setSensorData(prev => ({
-          ...prev,
-          allSensors: { distance: data.distance, ldr: data.ldr }
-        }));
+        toast({
+          title: "Invalid Response",
+          description: "Received unexpected data format from sensors",
+          variant: "destructive",
+          duration: 3000,
+        });
       }
     } catch (error) {
       toast({
