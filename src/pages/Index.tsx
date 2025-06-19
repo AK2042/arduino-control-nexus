@@ -1,5 +1,4 @@
-
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Power, PowerOff, Waves, Eye, Ruler, Database } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -23,6 +22,44 @@ const Index = () => {
   });
 
   const BASE_URL = "http://127.0.0.1:8000";
+
+  // Auto-refresh sensor data every second
+  useEffect(() => {
+    const fetchSensorData = async () => {
+      try {
+        // Fetch individual LDR data
+        const ldrResponse = await fetch(`${BASE_URL}/ldr`);
+        const ldrData = await ldrResponse.json();
+        
+        // Fetch individual distance data
+        const distanceResponse = await fetch(`${BASE_URL}/ultrasonic`);
+        const distanceData = await distanceResponse.json();
+        
+        // Fetch combined sensor data
+        const allSensorsResponse = await fetch(`${BASE_URL}/sensors`);
+        const allSensorsData = await allSensorsResponse.json();
+        
+        setSensorData({
+          ldr: ldrData.ldr_value,
+          distance: distanceData.distance_cm,
+          allSensors: allSensorsData.error 
+            ? { distance: 'Error', ldr: 'Error' }
+            : { distance: allSensorsData.distance, ldr: allSensorsData.ldr }
+        });
+      } catch (error) {
+        console.log('Auto-refresh failed, sensor might be disconnected');
+      }
+    };
+
+    // Initial fetch
+    fetchSensorData();
+    
+    // Set up interval for auto-refresh
+    const interval = setInterval(fetchSensorData, 1000);
+    
+    // Cleanup interval on component unmount
+    return () => clearInterval(interval);
+  }, [BASE_URL]);
 
   const controlLED = async (led: number, state: 'on' | 'off') => {
     setLoading(prev => ({ ...prev, leds: { ...prev.leds, [led]: true } }));
@@ -230,6 +267,7 @@ const Index = () => {
               <CardTitle className="text-2xl text-white flex items-center gap-3">
                 <Eye className="h-7 w-7 text-purple-400" />
                 Individual Sensors
+                <div className="ml-auto w-3 h-3 bg-green-400 rounded-full animate-pulse" title="Auto-updating every second" />
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -278,6 +316,7 @@ const Index = () => {
               <CardTitle className="text-2xl text-white flex items-center gap-3">
                 <Database className="h-7 w-7 text-emerald-400" />
                 Combined Sensor Data
+                <div className="ml-auto w-3 h-3 bg-green-400 rounded-full animate-pulse" title="Auto-updating every second" />
               </CardTitle>
             </CardHeader>
             <CardContent>
